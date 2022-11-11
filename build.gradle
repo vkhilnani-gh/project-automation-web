@@ -1,0 +1,167 @@
+
+group 'com.company.automation.testutil.web.ui'
+version '1.0-SNAPSHOT'
+
+//Plugin DSL. Code until logger installs plug-ins
+//New way
+//plugins {
+//  id "net.linguica.maven-settings" version "0.5"
+//}
+
+//old way
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath "net.linguica.gradle:maven-settings-plugin:0.5"
+        classpath "org.owasp:dependency-check-gradle:7.3.0"
+        classpath "com.diffplug.spotless:spotless-plugin-gradle:6.11.0"
+        classpath "org.codehaus.groovy:groovy-all:2.4.3"
+    }
+}
+
+
+apply plugin: 'idea'
+apply plugin: 'java'
+apply plugin: 'java-library'
+apply plugin: 'maven-publish'
+apply plugin: 'org.owasp.dependencycheck'
+apply plugin: 'com.diffplug.spotless'
+apply plugin: 'checkstyle'
+//For Azure Artifacts
+apply plugin: "net.linguica.maven-settings"
+
+idea {
+    module {downloadSources = true}
+
+}
+sourceCompatibility = 1.8
+logger.quiet "Running java version " + System.properties['java.version']
+logger.quiet "Running gradle version  + $gradle.gradleVersion"
+
+
+spotless{
+    java {
+        importOrderFile 'config/spotless/SpotlessImportOrder.importorder'
+        indentWithSpaces()
+        trimTrailingWhitespace()
+        replaceRegex 'Remove empty lines before end of block', '\\n[\\n]+(\\s*})(?=\\n)', '\n$1'
+        replaceRegex('Remove trailing empty comment lines.', '\n\\s*\\*(\n\\s*\\*/\n)', '$1')
+    }
+}
+
+checkstyle {
+    toolVersion = "8.10.1"
+    maxErrors = 1
+    maxWarnings = 1
+    configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+    checkstyleTest.enabled = false
+}
+
+checkstyleMain {
+    source = 'src/main'
+}
+//Library management
+repositories {
+    mavenCentral()
+    mavenLocal()
+// The below code downloads in-house libraries say from Azure Artifacts. Authentication needs settings.xml in .m2 folder
+//with azureArtifactFeedname and PAT generated from Azure
+//    maven {
+//        url "https://pkgs.dev.azure.com/companyName/xyz-123/_packaging/azureArtifactFeedname/maven/v1"
+//        name 'azureArtifactFeedname'
+//        authentication {
+//            basic(BasicAuthentication)
+//        }
+//    }
+}
+
+//for Test run only
+
+test {
+    systemProperties = System.getProperties();
+    systemProperty "envName", System.getProperty("envName")
+}
+
+//Code below helps in publishing the jar as lib/artifact in company's private space e.g in Azure Dev Ops
+
+configurations {
+    //config that enables jar to include extraLibs
+    extraLibs
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/org.seleniumhq.selenium/selenium-java
+    implementation group: 'org.seleniumhq.selenium', name: 'selenium-java', version: '4.0.0-beta-4'
+    implementation group: 'org.seleniumhq.selenium', name: 'selenium-support', version: '4.0.0-beta-4'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.17.2'
+    implementation group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.17.2'
+
+    //For TestDataManager
+    implementation group: 'com.codoid.products', name: 'fillo', version: '1.21'
+
+    //Image capture
+    implementation group: 'ru.yandex.qatools.ashot', name: 'ashot', version: '1.5.4'
+
+    implementation group: 'io.cucumber', name: 'cucumber-core', version: '6.10.2'
+    implementation group: 'io.cucumber', name: 'cucumber-picocontainer', version: '6.10.2'
+
+    implementation group: 'io.cucumber', name: 'cucumber-java8', version: '6.10.2'
+    implementation group: 'io.cucumber', name: 'cucumber-junit', version: '6.10.2'
+
+    //Web Driver manager (Note the issues with depending on 3rd party to download an .exe)
+    implementation group: 'io.github.bonigarcia', name: 'webdrivermanager', version: '5.2.3'
+
+    //Cucumber does not come with an assertion library.
+    // When using JUnit 4 to run Cucumber, it is recommended to use JUnit 4’s assert* methods.
+    testImplementation group: 'junit', name: 'junit', version: '4.4'
+
+    //The below code will publish extraLibs along with util jar?
+    extraLibs group: 'org.seleniumhq.selenium', name: 'selenium-java', version: '4.0.0-beta-4'
+    extraLibs group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
+    extraLibs group: 'org.apache.logging.log4j', name: 'log4j-core', version: '2.17.2'
+    extraLibs group: 'org.apache.logging.log4j', name: 'log4j-api', version: '2.17.2'
+    extraLibs group: 'com.codoid.products', name: 'fillo', version: '1.21'
+    extraLibs group: 'ru.yandex.qatools.ashot', name: 'ashot', version: '1.5.4'
+
+}
+
+//Publishing only
+    java {
+        withJavadocJar()
+        withSourcesJar()
+    }
+
+    jar {
+        from {
+            configurations.extraLibs.collect { it.isDirectory() ? it : zipTree(it) }
+        }
+    }
+
+    publishing {
+        publications {
+            mavanJava(MavenPublication) {
+                groupId = "com.company.automation.testutil.web.ui"
+                artifactId = "project-automation-web"
+                version '1.0-SNAPSHOT'
+                from components.java
+            }
+        }
+
+        repositories {
+// Repository where artifact/library needs to be published.
+//    maven {
+//        url "https://pkgs.dev.azure.com/companyName/xyz-123/_packaging/azureArtifactFeedname/maven/v1"
+//        name 'azureArtifactFeedname'
+//        authentication {
+//            basic(BasicAuthentication)
+//        }
+//    }
+        }
+
+    }
